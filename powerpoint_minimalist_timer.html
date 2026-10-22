@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presentation Timer</title>
+    <style>
+        /* Modern CSS Variables & Reset - No External CDNs Required */
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-primary: #6366f1;
+            --accent-hover: #4f46e5;
+            --border-color: #334155;
+            --status-bg: rgba(99, 102, 241, 0.15);
+            --status-text: #818cf8;
+            --input-bg: #0f172a;
+            --ring-track: #1e293b;
+            --ring-progress: #6366f1;
+        }
+
+        [data-theme="light"] {
+            --bg-color: #ffffff;
+            --card-bg: #f8fafc;
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            --accent-primary: #4f46e5;
+            --accent-hover: #4338ca;
+            --border-color: #cbd5e1;
+            --status-bg: rgba(79, 70, 229, 0.1);
+            --status-text: #4f46e5;
+            --input-bg: #ffffff;
+            --ring-track: #e2e8f0;
+            --ring-progress: #4f46e5;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Guaranteed no scrollbars in PPT slide frame */
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+        }
+
+        /* Top Header Utility Bar */
+        header {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            transition: opacity 0.3s ease;
+        }
+
+        .brand-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-primary);
+            border-radius: 50%;
+        }
+
+        .controls-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background-color: var(--card-bg);
+            padding: 4px 8px;
+            border-radius: 9999px;
+            border: 1px solid var(--border-color);
+        }
+
+        .icon-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .icon-btn:hover {
+            color: var(--text-main);
+            background-color: var(--border-color);
+        }
+
+        .divider {
+            width: 1px;
+            height: 16px;
+            background-color: var(--border-color);
+        }
+
+        /* Main Display Area */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .timer-container {
+            position: relative;
+            width: min(65vh, 80vw);
+            height: min(65vh, 80vw);
+            max-width: 480px;
+            max-height: 480px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 1rem 0;
+        }
+
+        .progress-ring {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .progress-ring-track {
+            stroke: var(--ring-track);
+            stroke-width: 6;
+            fill: transparent;
+            transition: stroke 0.3s ease;
+        }
+
+        .progress-ring-circle {
+            stroke: var(--ring-progress);
+            stroke-width: 7;
+            stroke-linecap: round;
+            fill: transparent;
+            stroke-dasharray: 283;
+            stroke-dashoffset: 0;
+            transition: stroke-dashoffset 0.3s ease, stroke 0.3s ease;
+        }
+
+        .display-content {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .time-text {
+            font-family: 'Courier New', Courier, monospace, monospace;
+            font-weight: 700;
+            font-size: clamp(3rem, 12vw, 5.5rem);
+            letter-spacing: -2px;
+            color: var(--text-main);
+            line-height: 1;
+        }
+
+        .status-badge {
+            margin-top: 1rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            padding: 4px 14px;
+            border-radius: 9999px;
+            background-color: var(--status-bg);
+            color: var(--status-text);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        /* Quick Adjustment Buttons & Manual Inputs */
+        .input-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 1.5rem;
+            transition: opacity 0.3s ease;
+        }
+
+        .quick-adj-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chip-btn {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .chip-btn:hover {
+            background-color: var(--border-color);
+            transform: translateY(-1px);
+        }
+
+        .chip-btn:active {
+            transform: translateY(0);
+        }
+
+        .time-inputs {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .input-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .input-box input {
+            width: 60px;
+            height: 44px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.25rem;
+            font-weight: 700;
+            text-align: center;
+            outline: none;
+        }
+
+        .input-box input:focus {
+            border-color: var(--accent-primary);
+        }
+
+        .input-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-top: 4px;
+            font-weight: 600;
+        }
+
+        .colon {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        .set-btn {
+            height: 44px;
+            padding: 0 16px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 16px;
+        }
+
+        .set-btn:hover {
+            background-color: var(--border-color);
+        }
+
+        /* Action Buttons */
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .btn-reset {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-reset:hover {
+            color: var(--text-main);
+            background-color: var(--border-color);
+        }
+
+        .btn-start {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background-color: var(--accent-primary);
+            border: none;
+            color: #ffffff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.6rem;
+            box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .btn-start:hover {
+            background-color: var(--accent-hover);
+            transform: scale(1.05);
+        }
+
+        .btn-start:active {
+            transform: scale(0.95);
+        }
+
+        /* Footer */
+        footer {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            transition: opacity 0.3s ease;
+        }
+
+        /* Disabled state when timer running */
+        .dimmed {
+            opacity: 0.35;
+            pointer-events: none;
+        }
+
+        .hidden {
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header / Utilities Bar -->
+    <header id="headerBar">
+        <div class="brand-title">
+            <div class="dot"></div>
+            <span>Timer</span>
+        </div>
+
+        <div class="controls-group">
+            <button class="icon-btn" onclick="toggleFocusMode()" title="Presentation Focus Mode">
+                <span id="focusIcon">⛶</span>
+            </button>
+            <div class="divider"></div>
+            <button class="icon-btn" onclick="toggleSound()" title="Toggle Sound">
+                <span id="soundIcon">🔊</span>
+            </button>
+            <div class="divider"></div>
+            <button class="icon-btn" onclick="toggleTheme()" title="Toggle High Contrast Theme">
+                <span id="themeIcon">🌙</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Timer Ring Display -->
+        <div class="timer-container">
+            <svg class="progress-ring" viewBox="0 0 100 100">
+                <circle class="progress-ring-track" cx="50" cy="50" r="45" />
+                <circle id="progressCircle" class="progress-ring-circle" cx="50" cy="50" r="45" />
+            </svg>
+            <div class="display-content">
+                <div id="timerDisplay" class="time-text">05:00</div>
+                <div id="statusBadge" class="status-badge">Ready</div>
+            </div>
+        </div>
+
+        <!-- Adjustment Controls -->
+        <div id="inputSection" class="input-section">
+            <div class="quick-adj-group">
+                <button class="chip-btn" onclick="adjustTime(-60)">-1m</button>
+                <button class="chip-btn" onclick="adjustTime(60)">+1m</button>
+                <button class="chip-btn" onclick="adjustTime(300)">+5m</button>
+                <button class="chip-btn" onclick="adjustTime(600)">+10m</button>
+            </div>
+
+            <div class="time-inputs">
+                <div class="input-box">
+                    <input type="number" id="inputH" min="0" max="99" value="0" placeholder="00">
+                    <span class="input-label">Hrs</span>
+                </div>
+                <span class="colon">:</span>
+                <div class="input-box">
+                    <input type="number" id="inputM" min="0" max="59" value="5" placeholder="00">
+                    <span class="input-label">Min</span>
+                </div>
+                <span class="colon">:</span>
+                <div class="input-box">
+                    <input type="number" id="inputS" min="0" max="59" value="0" placeholder="00">
+                    <span class="input-label">Sec</span>
+                </div>
+                <button class="set-btn" onclick="applyCustomTime()">Set</button>
+            </div>
+        </div>
+
+        <!-- Primary Actions -->
+        <div class="actions">
+            <button class="btn-reset" onclick="resetTimer()" title="Reset Timer">↻</button>
+            <button id="startBtn" class="btn-start" onclick="toggleTimer()" title="Start/Pause">▶</button>
+        </div>
+    </main>
+
+    <footer id="footerBar">Presentation Mode Timer</footer>
+
+    <script>
+        // State Variables
+        let soundEnabled = true;
+        let isDarkMode = true;
+        let isFocusMode = false;
+
+        let totalDuration = 300; // default 5 minutes (seconds)
+        let remainingSeconds = 300;
+        let timerInterval = null;
+        let isRunning = false;
+
+        const CIRCUMFERENCE = 2 * Math.PI * 45; // radius is 45 in SVG
+
+        // Elements
+        const timerDisplay = document.getElementById('timerDisplay');
+        const statusBadge = document.getElementById('statusBadge');
+        const progressCircle = document.getElementById('progressCircle');
+        const startBtn = document.getElementById('startBtn');
+        const inputSection = document.getElementById('inputSection');
+        const headerBar = document.getElementById('headerBar');
+        const footerBar = document.getElementById('footerBar');
+
+        // Initial setup
+        window.onload = function() {
+            updateDisplay();
+            updateProgress();
+
+            // Auto bounds checking on input fields
+            ['inputH', 'inputM', 'inputS'].forEach(id => {
+                const el = document.getElementById(id);
+                el.addEventListener('change', function() {
+                    if (this.value < 0) this.value = 0;
+                    if (id !== 'inputH' && this.value > 59) this.value = 59;
+                });
+            });
+        };
+
+        // Synthesized Pure Web Audio API Tone (No audio files needed)
+        function playChimeSound() {
+            if (!soundEnabled) return;
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioCtx();
+
+                const createNote = (freq, start, duration) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, start);
+
+                    gain.gain.setValueAtTime(0, start);
+                    gain.gain.linearRampToValueAtTime(0.3, start + 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+
+                    osc.start(start);
+                    osc.stop(start + duration);
+                };
+
+                const now = ctx.currentTime;
+                // High-visibility crisp chime (C5 -> G5 -> C6)
+                createNote(523.25, now, 0.25);
+                createNote(783.99, now + 0.15, 0.25);
+                createNote(1046.50, now + 0.30, 0.6);
+            } catch (e) {
+                console.log('Audio Context Error:', e);
+            }
+        }
+
+        // Formatting Helpers
+        function formatTime(totalSecs) {
+            const h = Math.floor(totalSecs / 3600);
+            const m = Math.floor((totalSecs % 3600) / 60);
+            const s = totalSecs % 60;
+
+            const pad = (n) => String(n).padStart(2, '0');
+
+            if (h > 0) {
+                return `${pad(h)}:${pad(m)}:${pad(s)}`;
+            }
+            return `${pad(m)}:${pad(s)}`;
+        }
+
+        function updateDisplay() {
+            timerDisplay.textContent = formatTime(remainingSeconds);
+        }
+
+        function updateProgress() {
+            const offset = CIRCUMFERENCE - (remainingSeconds / totalDuration) * CIRCUMFERENCE;
+            progressCircle.style.strokeDashoffset = isNaN(offset) ? 0 : offset;
+        }
+
+        // Timer Operations
+        function toggleTimer() {
+            if (isRunning) {
+                pauseTimer();
+            } else {
+                startTimer();
+            }
+        }
+
+        function startTimer() {
+            if (remainingSeconds <= 0) return;
+
+            isRunning = true;
+            startBtn.textContent = '⏸';
+            statusBadge.textContent = 'Running';
+            statusBadge.style.color = 'var(--accent-primary)';
+
+            inputSection.classList.add('dimmed');
+
+            timerInterval = setInterval(() => {
+                remainingSeconds--;
+                updateDisplay();
+                updateProgress();
+
+                if (remainingSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    timerCompleted();
+                }
+            }, 1000);
+        }
+
+        function pauseTimer() {
+            isRunning = false;
+            clearInterval(timerInterval);
+            startBtn.textContent = '▶';
+            statusBadge.textContent = 'Paused';
+            statusBadge.style.color = '#f59e0b'; // amber color for pause
+
+            inputSection.classList.remove('dimmed');
+        }
+
+        function resetTimer() {
+            pauseTimer();
+            remainingSeconds = totalDuration;
+            updateDisplay();
+            updateProgress();
+            statusBadge.textContent = 'Ready';
+            statusBadge.style.color = 'var(--status-text)';
+        }
+
+        function adjustTime(secondsToAdd) {
+            pauseTimer();
+            let newSecs = remainingSeconds + secondsToAdd;
+            if (newSecs < 0) newSecs = 0;
+            totalDuration = newSecs;
+            remainingSeconds = newSecs;
+            updateDisplay();
+            updateProgress();
+        }
+
+        function applyCustomTime() {
+            const h = parseInt(document.getElementById('inputH').value) || 0;
+            const m = parseInt(document.getElementById('inputM').value) || 0;
+            const s = parseInt(document.getElementById('inputS').value) || 0;
+
+            const total = h * 3600 + m * 60 + s;
+            if (total > 0) {
+                pauseTimer();
+                totalDuration = total;
+                remainingSeconds = total;
+                updateDisplay();
+                updateProgress();
+                statusBadge.textContent = 'Ready';
+                statusBadge.style.color = 'var(--status-text)';
+            }
+        }
+
+        function timerCompleted() {
+            isRunning = false;
+            startBtn.textContent = '▶';
+            statusBadge.textContent = 'Time Up';
+            statusBadge.style.color = '#10b981'; // green status
+            inputSection.classList.remove('dimmed');
+
+            playChimeSound();
+        }
+
+        // Feature Toggles
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('soundIcon').textContent = soundEnabled ? '🔊' : '🔇';
+        }
+
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            if (isDarkMode) {
+                document.documentElement.removeAttribute('data-theme');
+                document.getElementById('themeIcon').textContent = '🌙';
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+                document.getElementById('themeIcon').textContent = '☀️';
+            }
+        }
+
+        function toggleFocusMode() {
+            isFocusMode = !isFocusMode;
+            if (isFocusMode) {
+                headerBar.classList.add('hidden');
+                footerBar.classList.add('hidden');
+                inputSection.classList.add('hidden');
+                document.getElementById('focusIcon').textContent = '❐';
+            } else {
+                headerBar.classList.remove('hidden');
+                footerBar.classList.remove('hidden');
+                inputSection.classList.remove('hidden');
+                document.getElementById('focusIcon').textContent = '⛶';
+            }
+        }
+    </script>
+</body>
+</html>
